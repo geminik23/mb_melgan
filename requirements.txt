@@ -3,3 +3,5 @@ torchaudio
 numpy
 librosa
 python-dotenv
+seaborn
+tqdm
