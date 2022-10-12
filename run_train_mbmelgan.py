@@ -7,8 +7,8 @@ import seaborn as sns
 
 from utils import weights_init_xavier_uniform
 from dataset import load_ljspeech_dataset
-from modules import Discriminator, MultiBandGenerator
-from trains import MBMelGANTrainer
+from modules import Discriminator, MultiBandGenerator, FullBandGenerator
+from trainers import MBMelGANTrainer, FBMelGANTrainer
 
 
 ##
@@ -19,7 +19,6 @@ config = Config()
 
 ##
 # Datasets
-
 trainset, _ = load_ljspeech_dataset(config)
 
 train_loader = DataLoader(trainset, batch_size=config.batch_size, pin_memory=False, shuffle=True)
@@ -34,7 +33,8 @@ print(device)
 ##
 # Initialize the model, optimizer, loss function
 
-G = MultiBandGenerator(config.n_mels)
+# G = MultiBandGenerator(config.n_mels)
+G = FullBandGenerator(config.n_mels)
 D = Discriminator()
 
 weights_init_xavier_uniform(G)
@@ -43,7 +43,6 @@ weights_init_xavier_uniform(D)
 
 
 ## Training setting for mb-melgan from paper
-# lambda =10
 # multi resolution STFT loss lambda =2.5
 
 # pre_net = MuLawEncoder(model.mu)
@@ -58,7 +57,8 @@ d_scheduler_builder = lambda opt: torch.optim.lr_scheduler.LambdaLR(optimizer=op
 
 ##
 # Trainer
-trainer = MBMelGANTrainer(G, D,
+# trainer = MBMelGANTrainer(G, D,
+trainer = FBMelGANTrainer(G, D,
                           g_optimizer_builder,
                           d_optimizer_builder,
                           g_scheduler_builder,

@@ -1,21 +1,16 @@
 
 import torch
-import torch.nn.functional as F
-import numpy as np
 import tqdm 
 import pandas as pd
 import os
-from pqmf import PQMF
 from stft_loss import MultiResolutionSTFTLoss
-from utils import to_device
-import time
 
 from tqdm.autonotebook import tqdm as nb_tqdm
 from tqdm import tqdm
 
 
 # two models / two optimizer 
-class MBMelGANTrainer(object):
+class BaseTrainer(object):
     def __init__(self, 
                  g_model, 
                  d_model,
@@ -36,8 +31,6 @@ class MBMelGANTrainer(object):
         os.makedirs(checkpoint_dir, exist_ok=True)
         self.tqdm = tqdm
         self.reset()
-
-        self.pqmf = PQMF()
         self.stft_loss = MultiResolutionSTFTLoss()
     
     def set_tqdm_for_notebook(self, notebook_tqdm=False):
@@ -123,7 +116,6 @@ class MBMelGANTrainer(object):
         self.d_model.to(device)
 
         self.stft_loss = self.stft_loss.to(device)
-        self.pqmf = self.pqmf.to(device)
 
         for epoch in self.tqdm(range(self.last_epoch + 1, self.last_epoch + 1 + epochs), desc="Epoch"):
             self.g_model = self.g_model.train()
@@ -145,173 +137,8 @@ class MBMelGANTrainer(object):
             
         return self.get_result()
 
+
     # ----------------------
     def run_epoch(self, data_loader, device, train_only_G=False, desc=None):
-        d_losses = []
-        g_losses = []
-
-        # measure the time
-        start = time.time()
-        for inputs, targets in self.tqdm(data_loader, desc=desc, leave=False):
-            inputs = to_device(inputs, device)
-            targets = to_device(targets, device)
-            
-            g_out_sub = self.g_model(inputs)
-            g_out = self.pqmf.synthesis(g_out_sub.detach())
-
-            with torch.no_grad():
-                targets_sub = self.pqmf.analysis(targets)
-
-            ##
-            # train discriminator
-            if not train_only_G:
-                # scores : [B, C=1, 128] X 3
-                fake_scores = self.d_model(g_out.detach())
-                real_scores = self.d_model(targets)
-
-                d_f_losses, d_r_losses = [],[]
-                for score in fake_scores: d_f_losses.append(F.mse_loss(score, torch.zeros_like(score)))
-                for score in real_scores: d_r_losses.append(F.mse_loss(score, torch.ones_like(score)))
-                
-                d_loss = torch.stack(d_f_losses).mean() + torch.stack(d_r_losses).mean()
-
-                if self.d_model.training:
-                    self.d_optimizer.zero_grad()
-                    d_loss.backward()
-                    self.d_optimizer.step()
-                
-                    if self.d_lr_schedule is not None:
-                        self.d_lr_schedule.step()
-            
-            d_losses.append(d_loss.item() if not train_only_G else torch.zeros(1))
-
-            train_g = True
-
-            ##
-            # train genenator
-            if train_g:
-                fake_scores = self.d_model(g_out.detach())
-
-                # adversarial loss
-                d_adv_losses = []
-                for score in fake_scores: d_adv_losses.append(F.mse_loss(score, torch.ones_like(score)))
-                adv_loss = torch.stack(d_adv_losses).mean()
-
-                # stft loss
-                fb_loss = self.stft_loss(g_out[:, 0, :], targets[:, 0, :])
-                
-                sb_losses = []
-                for i in range(4): # 4 sub bands
-                    sb_losses.append(self.stft_loss(g_out_sub[:, i, :], targets_sub[:, i, :]))
-                sb_loss = torch.stack(sb_losses).mean()
-
-                    
-                # total
-                if train_only_G:
-                    g_loss = (fb_loss + sb_loss)/2.0
-                else:
-                    g_loss = self.lambda_adv * adv_loss + (fb_loss + sb_loss)/2.0
-
-                # only when training
-                if self.g_model.training:
-                    self.g_optimizer.zero_grad()
-                    g_loss.backward()
-                    self.g_optimizer.step()
-
-                    if self.g_lr_schedule is not None:
-                        self.g_lr_schedule.step()
-
-            g_losses.append(g_loss.item() if train_g else torch.zeros(1))
-        end = time.time() 
-        
-        self.result["g loss"].append(np.mean(g_losses))
-        self.result["d loss"].append(np.mean(d_losses))
-
-        return end-start
-
-
-def train_conditional_wgan_gp(cp_file_template, G, D, latent_size, optimizer_G, optimizer_D, data_loader, epochs, device='cpu'):
-    """
-    Args:
-    str: cp_file_template e.g "model_{}_e_{}.pt"
-
-    Return:
-    tuple: (generator loss, discriminator loss)
-    """
-
-    G.to(device)
-    D.to(device)
-
-
-    g_losses = []
-    d_losses = []
-
-    G.train()
-    D.train()
-    for epoch in tqdm(range(epochs)):
-        for data in tqdm(data_loader, leave=False):
-            data, class_label = data
-
-            real = data.to(device)
-            class_label = class_label.to(device)
-
-            bsize = data.size(0)
-
-            ### Step 1 : update D
-            D.zero_grad()
-            G.zero_grad()
-
-            # real
-            d_real = D(real, class_label)
-
-
-            # fake
-            z = torch.randn(bsize, latent_size, device=device)
-            fake = G(z, class_label)
-            d_fake = D(fake, class_label)
-
-            # gradient penalty
-            eps_shape = [bsize]+[1]*(len(data.shape)-1)
-            eps = torch.rand(eps_shape, device=device)
-            fake = eps*real + (1-eps)*fake
-            output = D(fake, class_label)
-
-            grad = torch.autograd.grad(outputs=output, inputs=fake,
-                                  grad_outputs=torch.ones(output.size(), device=device),
-                                  create_graph=True, retain_graph=True, only_inputs=True, allow_unused=True)[0]
-            d_grad_penalty = ((grad.norm(2, dim=1) - 1) ** 2).mean()
-
-            errd = (d_fake-d_real).mean() + d_grad_penalty.mean()*10
-            errd.backward()
-            optimizer_D.step()
-
-            d_losses.append(errd.item())
-
-            #### Step 2 : update G
-            D.zero_grad()
-            G.zero_grad()
-
-            noise = torch.randn(bsize, latent_size, device=device)
-            output = -D(G(noise, class_label), class_label)
-            errg = output.mean()
-            errg.backward()
-            optimizer_G.step()
-
-            g_losses.append(errg.item())
-
-        # save check_points
-        torch.save({
-            'losses': g_losses,
-            'epoch': epoch,
-            'model_state_dict': G.state_dict(),
-            }, cp_file_template.format('g', epoch))
-
-        torch.save({
-            'losses': d_losses,
-            'epoch': epoch,
-            'model_state_dict': D.state_dict(),
-        }, cp_file_template.format('d', epoch))
         pass
-
-
-    return g_losses, d_losses
+    # ----------------------

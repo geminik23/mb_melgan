@@ -1,5 +1,5 @@
 # Multi-band MelGAN 
-This project is a PyTorch implementation of the MB-MelGAN from originalk paper[1]
+This project is a PyTorch implementation of the MB-MelGAN from original paper [[1]](#references), covering the both models: Multi-band MelGAN and Full-band MelGAN.
 
 
 

@@ -46,7 +46,7 @@ class Config:
         self.checkpoint_interval = 1000
 
         # Hyperparamters
-        self.batch_size = 128 # batch-size 48, 128 to fb and mb respectively
+        self.batch_size = 48 # batch-size 48, 128 to fb and mb respectively
         self.g_lr = 1e-4 # 1e-4 adam optimizer
         self.d_lr = 1e-4  # instead n_critic different learning rate x3~5
         self.adam_betas= (0.5, 0.9)
