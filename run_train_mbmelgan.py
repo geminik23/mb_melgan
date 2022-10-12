@@ -7,7 +7,7 @@ import seaborn as sns
 
 from utils import weights_init_xavier_uniform
 from dataset import load_ljspeech_dataset
-from modules import MBMelGANDiscriminator, MBMelGANGenerator
+from modules import Discriminator, MultiBandGenerator
 from trains import MBMelGANTrainer
 
 
@@ -34,8 +34,8 @@ print(device)
 ##
 # Initialize the model, optimizer, loss function
 
-G = MBMelGANGenerator(config.n_mels)
-D = MBMelGANDiscriminator()
+G = MultiBandGenerator(config.n_mels)
+D = Discriminator()
 
 weights_init_xavier_uniform(G)
 weights_init_xavier_uniform(D)

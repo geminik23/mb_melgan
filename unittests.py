@@ -1,7 +1,7 @@
 import unittest
 import torch
 import torch.nn as nn
-from modules import MultiDownSampler, ResidualStack, MBMelGANGenerator, MBMelGANDiscriminator
+from modules import MultiDownSampler, ResidualStack, Discriminator, MultiBandGenerator, FullBandGenerator
 from stft_loss import MultiResolutionSTFTLoss
 from pqmf import PQMF
 
@@ -63,7 +63,7 @@ class MelGANTestCase(unittest.TestCase):
         n_channel = 1
         length = 8192
 
-        D = MBMelGANDiscriminator()
+        D = Discriminator()
 
         x = torch.randn((batch_size, n_channel, length))
         y = D(x)
@@ -80,11 +80,20 @@ class MelGANTestCase(unittest.TestCase):
         n_subbands = 4
 
         upsample = 200
-        G = MBMelGANGenerator(n_mels)
 
         x = torch.randn((batch_size, n_mels, frame_length))
+
+        ## MultiBand MelGAN
+        G = MultiBandGenerator(n_mels)
         y = G(x)
         self.assertEqual(torch.Size([batch_size, n_subbands, frame_length*upsample//n_subbands]), y.shape)
+        
+        ## FullBand MelGAN
+        G = FullBandGenerator(n_mels)
+        y = G(x)
+        self.assertEqual(torch.Size([batch_size, 1, frame_length*upsample]), y.shape)
+
+
 
 
     def test_residual_stack(self):
@@ -154,8 +163,6 @@ class MelGANTestCase(unittest.TestCase):
 
 
         
-
-
 
 
 if __name__ == '__main__':
