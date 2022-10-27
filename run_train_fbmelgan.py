@@ -7,7 +7,7 @@ import seaborn as sns
 
 from utils import weights_init_xavier_uniform
 from dataset import load_ljspeech_dataset
-from modules import Discriminator, MultiBandGenerator, FullBandGenerator
+from mbmelgan_model import Discriminator, MultiBandGenerator, FullBandGenerator
 from trainers import MBMelGANTrainer, FBMelGANTrainer
 
 
@@ -33,7 +33,6 @@ print(device)
 ##
 # Initialize the model, optimizer, loss function
 
-# G = MultiBandGenerator(config.n_mels)
 G = FullBandGenerator(config.n_mels)
 D = Discriminator()
 
@@ -57,7 +56,6 @@ d_scheduler_builder = lambda opt: torch.optim.lr_scheduler.LambdaLR(optimizer=op
 
 ##
 # Trainer
-# trainer = MBMelGANTrainer(G, D,
 trainer = FBMelGANTrainer(G, D,
                           g_optimizer_builder,
                           d_optimizer_builder,

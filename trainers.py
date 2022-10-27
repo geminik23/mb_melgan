@@ -47,38 +47,40 @@ class FBMelGANTrainer(BaseTrainer):
                     if self.d_lr_schedule is not None:
                         self.d_lr_schedule.step()
             
-            d_losses.append(d_loss.item() if not train_only_G else torch.zeros(1))
+            d_losses.append(d_loss.item() if not train_only_G else 0)
 
-            train_g = True
+            # 
+            # train_g = True
 
             ##
             # train genenator
-            if train_g:
-                fake_scores = self.d_model(g_out.detach())
+            # if train_g:
+            fake_scores = self.d_model(g_out.detach())
 
-                # adversarial loss
-                d_adv_losses = []
-                for score in fake_scores: d_adv_losses.append(F.mse_loss(score, torch.ones_like(score)))
-                adv_loss = torch.stack(d_adv_losses).mean()
+            # adversarial loss
+            d_adv_losses = []
+            for score in fake_scores: d_adv_losses.append(F.mse_loss(score, torch.ones_like(score)))
+            adv_loss = torch.stack(d_adv_losses).mean()
 
-                # stft loss
-                stft_loss = self.stft_loss(g_out[:, 0, :], targets[:, 0, :])
-                    
-                # total
-                if train_only_G:
-                    g_loss = stft_loss
-                else:
-                    g_loss = self.lambda_adv * adv_loss + stft_loss
+            # stft loss
+            stft_loss = self.stft_loss(g_out[:, 0, :], targets[:, 0, :])
+                
+            # total
+            if train_only_G:
+                g_loss = stft_loss
+            else:
+                g_loss = self.lambda_adv * adv_loss + stft_loss
 
-                # only when training
-                if self.g_model.training:
-                    self.g_optimizer.zero_grad()
-                    g_loss.backward()
-                    self.g_optimizer.step()
+            # only when training
+            if self.g_model.training:
+                self.g_optimizer.zero_grad()
+                g_loss.backward()
+                self.g_optimizer.step()
 
-                    if self.g_lr_schedule is not None:
-                        self.g_lr_schedule.step()
-            g_losses.append(g_loss.item() if train_g else torch.zeros(1))
+                if self.g_lr_schedule is not None:
+                    self.g_lr_schedule.step()
+            # g_losses.append(g_loss.item() if train_g else 0)
+            g_losses.append(g_loss.item())
 
         end = time.time() 
         
@@ -96,6 +98,8 @@ class MBMelGANTrainer(BaseTrainer):
     def run_epoch(self, data_loader, device, train_only_G=False, desc=None):
         d_losses = []
         g_losses = []
+
+        self.pqmf = self.pqmf.to(device)
 
         # measure the time
         start = time.time()
@@ -130,47 +134,49 @@ class MBMelGANTrainer(BaseTrainer):
                     if self.d_lr_schedule is not None:
                         self.d_lr_schedule.step()
             
-            d_losses.append(d_loss.item() if not train_only_G else torch.zeros(1))
+            d_losses.append(d_loss.item() if not train_only_G else 0)
 
-            train_g = True
+            # train_g = True
 
             ##
             # train genenator
-            if train_g:
-                fake_scores = self.d_model(g_out.detach())
+            # if train_g:
+            fake_scores = self.d_model(g_out.detach())
 
-                # adversarial loss
-                d_adv_losses = []
-                for score in fake_scores: d_adv_losses.append(F.mse_loss(score, torch.ones_like(score)))
-                adv_loss = torch.stack(d_adv_losses).mean()
+            # adversarial loss
+            d_adv_losses = []
+            for score in fake_scores: d_adv_losses.append(F.mse_loss(score, torch.ones_like(score)))
+            adv_loss = torch.stack(d_adv_losses).mean()
 
-                # stft loss
-                fb_loss = self.stft_loss(g_out[:, 0, :], targets[:, 0, :])
+            # stft loss
+            fb_loss = self.stft_loss(g_out[:, 0, :], targets[:, 0, :])
+            
+            sb_losses = []
+            for i in range(4): # 4 sub bands
+                sb_losses.append(self.stft_loss(g_out_sub[:, i, :], targets_sub[:, i, :]))
+            sb_loss = torch.stack(sb_losses).mean()
+
+            stft_loss = (fb_loss + sb_loss) / 2.0
                 
-                sb_losses = []
-                for i in range(4): # 4 sub bands
-                    sb_losses.append(self.stft_loss(g_out_sub[:, i, :], targets_sub[:, i, :]))
-                sb_loss = torch.stack(sb_losses).mean()
+            # total
+            if train_only_G:
+                g_loss = stft_loss
+            else:
+                g_loss = self.lambda_adv * adv_loss + stft_loss
 
-                stft_loss = (fb_loss + sb_loss) / 2.0
-                    
-                # total
-                if train_only_G:
-                    g_loss = stft_loss
-                else:
-                    g_loss = self.lambda_adv * adv_loss + stft_loss
+            # only when training
+            if self.g_model.training:
+                self.g_optimizer.zero_grad()
+                g_loss.backward()
+                self.g_optimizer.step()
 
-                # only when training
-                if self.g_model.training:
-                    self.g_optimizer.zero_grad()
-                    g_loss.backward()
-                    self.g_optimizer.step()
+                if self.g_lr_schedule is not None:
+                    self.g_lr_schedule.step()
 
-                    if self.g_lr_schedule is not None:
-                        self.g_lr_schedule.step()
-
-            g_losses.append(g_loss.item() if train_g else torch.zeros(1))
+            g_losses.append(g_loss.item())
+            # g_losses.append(g_loss.item() if train_g else torch.zeros(1))
         end = time.time() 
+
         
         self.result["g loss"].append(np.mean(g_losses))
         self.result["d loss"].append(np.mean(d_losses))

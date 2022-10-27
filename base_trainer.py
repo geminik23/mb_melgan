@@ -80,8 +80,8 @@ class BaseTrainer(object):
             'd_model_state_dict': self.d_model.state_dict(),
             'g_optimizer_state_dict': self.g_optimizer.state_dict(),
             'd_optimizer_state_dict': self.d_optimizer.state_dict(),
-            'g_rl_schedule_state_dict': None if self.g_lr_schedule is None else self.g_rl_schedule.state_dict(),
-            'd_rl_schedule_state_dict': None if self.d_lr_schedule is None else self.d_rl_schedule.state_dict(),
+            'g_rl_schedule_state_dict': None if self.g_lr_schedule is None else self.g_lr_schedule.state_dict(),
+            'd_rl_schedule_state_dict': None if self.d_lr_schedule is None else self.d_lr_schedule.state_dict(),
             'result' : self.result,
             }, os.path.join(self.checkpoint_dir, filename))
 

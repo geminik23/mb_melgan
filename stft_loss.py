@@ -6,7 +6,12 @@ import torch.nn as nn
 def spectral_convergence(prediction, target):
     return torch.norm(target - prediction, p='fro') / torch.norm(target, p='fro')
 
+
+# !issue.. 
+# magnitude contains 0.0 and log of value will be inf.
 def log_stft_magnitude(prediction, target):
+    prediction[prediction==0.0] = 1e-9
+    target[target==0.0] = 1e-9
     log_t = torch.log(target)
     log_p = torch.log(prediction)
     return nn.functional.l1_loss(log_p, log_t, reduction='mean')

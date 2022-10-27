@@ -13,7 +13,7 @@ if DATASET_PATH is None:
 class Config:
     def __init__(self):
 
-        self.num_workers = 8
+        self.num_workers = 16
 
         # dataset
         self.dataset_path = DATASET_PATH
@@ -43,16 +43,19 @@ class Config:
         # checkpoint
         self.checkpoint_dir = "model_cp"
         self.checkpoint_file_template = "mbmelgan_e_{}.pt"
-        self.checkpoint_interval = 1000
+        self.checkpoint_file_template_fb = "fbmelgan_e_{}.pt"
+        self.checkpoint_interval = 100
 
         # Hyperparamters
-        self.batch_size = 48 # batch-size 48, 128 to fb and mb respectively
+        self.batch_size = 128 # batch-size 48, 128 to fb and mb respectively
+        self.batch_size_fb = 48 # batch-size 48, 128 to fb and mb respectively
         self.g_lr = 1e-4 # 1e-4 adam optimizer
         self.d_lr = 1e-4  # instead n_critic different learning rate x3~5
         self.adam_betas= (0.5, 0.9)
         self.lambda_adv = 2.5
         self.epochs = 500000
         self.train_after = None # full file path e.g "model_cp/mbmelgan_e_100.pt"
+        # self.train_after = "model_cp/mbmelgan_e_200.pt"
         self.train_generator_until = 200000
 
         
